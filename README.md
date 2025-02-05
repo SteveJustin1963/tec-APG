@@ -3,10 +3,7 @@ TEC-1 programmable avalanche pulse generator
 
 Danger HV
 
-
-**TL;DR**: Combine a Z80 SBC’s programmability with an avalanche transistor circuit to create adjustable high-voltage pulses. Use optocouplers for safety, CTC timers for precision, and test rigorously with an oscilloscope. Perfect for retro-tech enthusiasts and pulse electronics experiments! ⚡
-
-Building a programmable avalanche pulse generator using a Z80 single-board computer (SBC) combines retro computing with high-voltage electronics. Below is a detailed guide to design and assemble such a system, leveraging the Z80's programmability for timing control and parameter adjustment.
+Combine the programmability of a Z80 single-board computer (SBC) with an avalanche transistor circuit to generate adjustable high-voltage pulses, ideal for pulse electronics experiments and retro-tech applications. By integrating optocouplers for safety and utilizing the Z80's CTC timers for precise control, this setup enables dynamic pulse shaping with software-driven adjustments. Rigorous oscilloscope testing ensures reliability, making it a powerful tool for exploring high-speed switching and transient phenomena. ⚡
 
 ---
 
