@@ -129,6 +129,237 @@ DELAY_LOOP:
 ---
 
 
+# functional
+
+Here is the **functional hardware block diagram** of **TEC-APG v2**, focusing on how different hardware components interact to generate precise **high-voltage avalanche pulses**.
+
+---
+
+### **🔹 TEC-APG v2 Functional Hardware Block Diagram (ASCII)**
+```plaintext
++------------------------------------------------------------+
+|                        Z80 SBC                             |
+|  +-------------------------------+                        |
+|  | CTC Timer (0x03, 0x04)        |   +------------------+ |
+|  | - Controls pulse timing       |   | Digital Potentiometer |
+|  | - Triggers pulse event        |   | (MCP4131, 8-bit SPI)  |
+|  +-------------------------------+   | - Adjusts frequency  |
+|  | SPI Interface (0x05, 0x06, 0x07) | - Adjusts pulse width |
+|  | - Sends commands to digipot     |   +------------------+ |
+|  +-------------------------------+                        |
+|  | GPIO Output (0x02)            |   +--------------------+ |
+|  | - Sends trigger pulse         |   |  555 Timer One-Shot |
+|  +-------------------------------+   |  - Generates short  |
+|                                       |    trigger pulse    |
+|                                       +--------------------+ |
++------------------------------------------------------------+
+            │
+            │
+            ▼
++------------------------------------------------------------+
+|                    555 Timer One-Shot Circuit              |
+|  - Converts GPIO trigger into a precise short pulse        |
+|  - Pulse width determined by R & C values                 |
+|  - Prevents false triggering                              |
++------------------------------------------------------------+
+            │
+            │
+            ▼
++------------------------------------------------------------+
+|                      Optocoupler (4N35)                   |
+|  - Electrically isolates Z80 from high-voltage section     |
+|  - Translates low-voltage pulse to HV trigger signal       |
++------------------------------------------------------------+
+            │
+            │
+            ▼
++------------------------------------------------------------+
+|                     MOSFET Driver (TC4420)                |
+|  - Boosts trigger signal from optocoupler                 |
+|  - Ensures fast switching to drive avalanche transistor    |
++------------------------------------------------------------+
+            │
+            │
+            ▼
++------------------------------------------------------------+
+|                 Avalanche Transistor Circuit              |
+|  - Uses a high-speed NPN transistor (ZTX415)              |
+|  - C_storage charges via R_charge from HV supply          |
+|  - When triggered, rapid breakdown generates HV pulse     |
+|  - Pulse duration controlled by capacitance               |
++------------------------------------------------------------+
+            │
+            │
+            ▼
++------------------------------------------------------------+
+|                  High Voltage (100V - 200V)               |
+|  - Provides energy for avalanche breakdown                |
+|  - Isolated from Z80 SBC for safety                       |
++------------------------------------------------------------+
+```
+
+---
+
+### **🔹 How It Works (Step-by-Step)**
+1. **Z80 SBC Generates Pulse Timing**
+   - The **CTC timer** calculates when to trigger a pulse.
+   - **GPIO (0x02) outputs a HIGH signal** to start the pulse.
+
+2. **555 Timer One-Shot Generates Sharp Trigger Pulse**
+   - The **555 monostable circuit** ensures a precise, **short-duration** pulse.
+   - Prevents false triggering or excessive ON time.
+
+3. **Optocoupler Electrically Isolates High-Voltage Circuit**
+   - The optocoupler translates the **5V trigger** into a **high-voltage-safe signal**.
+
+4. **MOSFET Driver Amplifies Trigger Pulse**
+   - Converts the **low-power optocoupler output** into a **high-speed switching pulse**.
+
+5. **Avalanche Transistor Discharges High-Voltage Pulse**
+   - When triggered, the **ZTX415 transistor breaks down** and **rapidly discharges C_storage**.
+   - This generates a **fast, high-voltage pulse**.
+
+6. **Circuit Resets for Next Pulse**
+   - The **capacitor recharges** via **R_charge**.
+   - The system waits for the next Z80 **CTC-generated timing event**.
+
+---
+
+### **🔹 Key Functional Improvements**
+✅ **Ensures Fast, Stable, and Repeatable High-Voltage Pulses**  
+✅ **Prevents Over-triggering with a Monostable One-Shot (555 Timer)**  
+✅ **Fully Isolates Z80 from HV using an Optocoupler**  
+✅ **SPI-Controlled Digital Potentiometer for Real-Time Pulse Adjustments**  
+
+---
+
+### **🔹 Next Steps**
+Would you like:
+1. **Z80 Assembly Code for GPIO + 555 Timer Triggering?**  
+2. **Component Values for Precise Pulse Width Control?**  
+3. **Additional Safety Features (HV Current Limiting, Filtering)?**  
+
+This **hardware block diagram** ensures a **fully functional TEC-APG v2**, optimized for **precise high-voltage pulse generation**. 🚀
+
+# cct
+
+Here's the **updated ASCII circuit diagram** incorporating the **555 Timer One-Shot Pulse Generator** to ensure a **sharp trigger pulse** for the avalanche transistor circuit.
+
+---
+
+### **🔹 Updated TEC-APG v2 Circuit Diagram with 555 Timer One-Shot Pulse**
+```plaintext
+                          +5V
+                           │
+         +-----------------┴----------------+
+         │            Z80 SBC (CPU)         │
+         │                                  │
+         │  GPIO_TRIGGER_PORT (0x02) ───────┼───────────┐
+         │                                  │           │
+         │  SPI_CS  (0x05) ───────────────┐ │           │
+         │  SPI_MOSI (0x06) ───────────┐  │ │           │
+         │  SPI_CLK  (0x07) ───────────┘  │ │           │
+         +---------------------------------+ │
+                                           │
+        +----------------+                 │
+        | Digital Pot    | (MCP4131)       │
+        | 8-bit, SPI     |                 │
+        |---------------+                  │
+        | Wiper (Vout)   |─────────────────┘
+        +----------------+
+
+        +----------------------------------+
+        │  CTC TIMER (Z80)                │
+        │  CH1 = Pulse ON Timer (0x03)    │
+        │  CH2 = Pulse OFF Timer (0x04)   │
+        +----------------------------------+
+
+        +----------------------------------+
+        │  555 Timer (Monostable Mode)    │
+        │                                  │
+        │  +5V ────────┬──────────┬───[8] VCC
+        │              │          │
+        │             [10kΩ]      │
+        │              │         [4] RESET
+        │ Z80 GPIO ────┤[2] TRIG │
+        │              │         │
+        │              │        [5] CV (Cap to GND)
+        │              │         │
+        │              │        [3] OUTPUT ───────────┐
+        │              │         │                    │
+        │              │        [6] THR ───┐         │
+        │              │                    │         │
+        │              └────────[C]─────────┘         │
+        │                (Timing Cap)                 │
+        │                                             │
+        +---------------------------------------------+
+
+        +----------------------------------+
+        │  Optocoupler (4N35 / PC817)      │
+        │                                  │
+        │  Anode (+5V) ───[1kΩ]───────┐    │
+        │                             │    │
+        │  Cathode (Input) ──── 555 ──┴────┼────────┐
+        │                                  │        │
+        │  Transistor Collector ────┐      │        │
+        │                           │      │        │
+        │  Transistor Emitter ─── GND      │        │
+        +----------------------------------+        │
+                                                   │
+        +------------------------------------------│--+
+        │  MOSFET Driver (TC4420)                  │  |
+        │                                          │  |
+        │  Gate ─────────── Optocoupler Output    │  |
+        │  Source ──────── GND                    │  |
+        │  Drain ─────────+ HV Trigger Signal     │  |
+        +------------------------------------------+  |
+                                                      │
+        +---------------------------------------------│--+
+        │  Avalanche Transistor Circuit (HV Pulse)   │  |
+        │                                            │  |
+        │  +HV (100-200V) ────────┐                  │  |
+        │                          │                 │  |
+        │  R_charge (10k-100kΩ) ───┤                 │  |
+        │                          │                 │  |
+        │  C_storage (100pF-10nF) ─┴──┐              │  |
+        │                            │              │  |
+        │  Avalanche Transistor (ZTX415)            │  |
+        │       ┌──────────────┐                    │  |
+        │       │  Collector    │───────────────────┘  |
+        │       │  Base (Trigger)│────── MOSFET Drain  |
+        │       │  Emitter      │────── GND           |
+        │       └──────────────┘                      |
+        +---------------------------------------------+
+```
+
+---
+
+### **🔹 How the 555 Timer One-Shot Works**
+1. **Z80 sends a GPIO HIGH pulse** to the **555 Timer's Trigger Input**.
+2. **The 555 Timer generates a short, precise pulse** (width set by `R` and `C` values).
+3. **555 Timer output goes HIGH** for a fixed time, then automatically goes LOW.
+4. **This pulse is passed through the optocoupler**, isolating the **Z80 from HV circuits**.
+5. **The MOSFET driver amplifies the signal**, triggering the **avalanche transistor breakdown**.
+
+---
+
+### **🔹 Why This Works Better**
+✅ **Ensures a sharp, fast trigger pulse**  
+✅ **Prevents accidental continuous triggering**  
+✅ **Fully resets before next pulse cycle**  
+✅ **Controlled by `R` and `C` values in the 555 Timer**  
+✅ **Isolates Z80 SBC from high-voltage circuits**
+
+---
+
+### **🔹 Next Steps**
+Would you like:
+1. **Component values for R and C in the 555 timer circuit?**  
+2. **Full Z80 assembly implementation for one-shot pulse triggering?**  
+3. **Simulated waveforms for expected output?**  
+
+This **updated circuit** makes TEC-APG **more reliable and accurate** while ensuring **proper avalanche transistor operation**. 🚀
+
 
 
 
