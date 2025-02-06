@@ -130,12 +130,7 @@ DELAY_LOOP:
 
 
 # functional
-
-Here is the **functional hardware block diagram** of **TEC-APG v2**, focusing on how different hardware components interact to generate precise **high-voltage avalanche pulses**.
-
----
-
-### **🔹 TEC-APG v2 Functional Hardware Block Diagram (ASCII)**
+ 
 ```plaintext
 +------------------------------------------------------------+
 |                        Z80 SBC                             |
@@ -198,56 +193,10 @@ Here is the **functional hardware block diagram** of **TEC-APG v2**, focusing on
 +------------------------------------------------------------+
 ```
 
----
-
-### **🔹 How It Works (Step-by-Step)**
-1. **Z80 SBC Generates Pulse Timing**
-   - The **CTC timer** calculates when to trigger a pulse.
-   - **GPIO (0x02) outputs a HIGH signal** to start the pulse.
-
-2. **555 Timer One-Shot Generates Sharp Trigger Pulse**
-   - The **555 monostable circuit** ensures a precise, **short-duration** pulse.
-   - Prevents false triggering or excessive ON time.
-
-3. **Optocoupler Electrically Isolates High-Voltage Circuit**
-   - The optocoupler translates the **5V trigger** into a **high-voltage-safe signal**.
-
-4. **MOSFET Driver Amplifies Trigger Pulse**
-   - Converts the **low-power optocoupler output** into a **high-speed switching pulse**.
-
-5. **Avalanche Transistor Discharges High-Voltage Pulse**
-   - When triggered, the **ZTX415 transistor breaks down** and **rapidly discharges C_storage**.
-   - This generates a **fast, high-voltage pulse**.
-
-6. **Circuit Resets for Next Pulse**
-   - The **capacitor recharges** via **R_charge**.
-   - The system waits for the next Z80 **CTC-generated timing event**.
-
----
-
-### **🔹 Key Functional Improvements**
-✅ **Ensures Fast, Stable, and Repeatable High-Voltage Pulses**  
-✅ **Prevents Over-triggering with a Monostable One-Shot (555 Timer)**  
-✅ **Fully Isolates Z80 from HV using an Optocoupler**  
-✅ **SPI-Controlled Digital Potentiometer for Real-Time Pulse Adjustments**  
-
----
-
-### **🔹 Next Steps**
-Would you like:
-1. **Z80 Assembly Code for GPIO + 555 Timer Triggering?**  
-2. **Component Values for Precise Pulse Width Control?**  
-3. **Additional Safety Features (HV Current Limiting, Filtering)?**  
-
-This **hardware block diagram** ensures a **fully functional TEC-APG v2**, optimized for **precise high-voltage pulse generation**. 🚀
-
+  
 # cct
 
-Here's the **updated ASCII circuit diagram** incorporating the **555 Timer One-Shot Pulse Generator** to ensure a **sharp trigger pulse** for the avalanche transistor circuit.
-
----
-
-### **🔹 Updated TEC-APG v2 Circuit Diagram with 555 Timer One-Shot Pulse**
+ 
 ```plaintext
                           +5V
                            │
@@ -332,34 +281,135 @@ Here's the **updated ASCII circuit diagram** incorporating the **555 Timer One-S
         +---------------------------------------------+
 ```
 
+ 
 ---
 
-### **🔹 How the 555 Timer One-Shot Works**
-1. **Z80 sends a GPIO HIGH pulse** to the **555 Timer's Trigger Input**.
-2. **The 555 Timer generates a short, precise pulse** (width set by `R` and `C` values).
-3. **555 Timer output goes HIGH** for a fixed time, then automatically goes LOW.
-4. **This pulse is passed through the optocoupler**, isolating the **Z80 from HV circuits**.
-5. **The MOSFET driver amplifies the signal**, triggering the **avalanche transistor breakdown**.
-
----
-
-### **🔹 Why This Works Better**
-✅ **Ensures a sharp, fast trigger pulse**  
-✅ **Prevents accidental continuous triggering**  
-✅ **Fully resets before next pulse cycle**  
-✅ **Controlled by `R` and `C` values in the 555 Timer**  
-✅ **Isolates Z80 SBC from high-voltage circuits**
+# I/O Port Assignments
+| **Port Address** | **Name**               | **Function** |
+|---------------|-------------------|------------|
+| **0x01**      | **CTC_CONTROL**   | Configures Z80 **CTC timer** (sets pulse timing, frequency, and delays). |
+| **0x02**      | **GPIO_TRIGGER**  | Outputs **trigger signal** to the **555 Timer One-Shot** for generating a sharp pulse. |
+| **0x03**      | **CTC_PULSE_ON**  | Sets the **ON duration** of the pulse (width). |
+| **0x04**      | **CTC_PULSE_OFF** | Sets the **OFF duration** (pulse frequency control). |
+| **0x05**      | **SPI_CS**        | SPI **Chip Select** for controlling the **MCP4131 Digital Potentiometer** (used to adjust pulse parameters). |
+| **0x06**      | **SPI_MOSI**      | SPI **Master Out, Slave In** (sends data to the digital potentiometer). |
+| **0x07**      | **SPI_CLK**       | SPI **Clock** for synchronizing data transfer to the digital potentiometer. |
 
 ---
 
-### **🔹 Next Steps**
-Would you like:
-1. **Component values for R and C in the 555 timer circuit?**  
-2. **Full Z80 assembly implementation for one-shot pulse triggering?**  
-3. **Simulated waveforms for expected output?**  
 
-This **updated circuit** makes TEC-APG **more reliable and accurate** while ensuring **proper avalanche transistor operation**. 🚀
+# sudo
 
+````
+# TEC-APG v2 - Optimized I/O Bit-Masked Control
+# Uses a single I/O port (0x01) and manipulates bits for control functions
+
+# ---------------------- DEFINE CONSTANTS ---------------------- #
+DEFINE IO_PORT         = 0x01   # Single I/O port for all control signals
+
+# Bit masks for individual functions
+DEFINE BIT_TRIGGER     = 0x01   # GPIO_TRIGGER (555 Timer One-Shot)
+DEFINE BIT_SPI_CS      = 0x02   # SPI Chip Select
+DEFINE BIT_SPI_MOSI    = 0x04   # SPI Data Out
+DEFINE BIT_SPI_CLK     = 0x08   # SPI Clock
+DEFINE BIT_CTC_ON      = 0x10   # CTC_PULSE_ON (Pulse Width)
+DEFINE BIT_CTC_OFF     = 0x20   # CTC_PULSE_OFF (Pulse Frequency)
+
+# ---------------------- DECLARE VARIABLES ---------------------- #
+DECLARE INTEGER io_state = 0x00   # Stores the current state of the I/O port
+DECLARE INTEGER pulse_frequency = 1000  # Default frequency (Hz)
+DECLARE INTEGER pulse_width     = 100   # Default pulse width (µs)
+DECLARE INTEGER user_input_freq  # User input for frequency
+DECLARE INTEGER user_input_width # User input for width
+
+# ---------------------- INITIALIZATION ---------------------- #
+FUNCTION INITIALIZE():
+    io_state = 0x00         # Clear all control bits
+    OUTPUT(IO_PORT, io_state) # Initialize I/O port
+
+# ---------------------- MAIN LOOP ---------------------- #
+FUNCTION MAIN_LOOP():
+    WHILE TRUE:
+        # Adjust Pulse Frequency using Digital Potentiometer
+        IF BUTTON_PRESSED(FREQ_BUTTON):
+            user_input_freq = READ_INPUT()
+            IF user_input_freq > 65535:
+                user_input_freq = 65535
+            pulse_frequency = user_input_freq
+
+        # Adjust Pulse Width using Digital Potentiometer
+        IF BUTTON_PRESSED(WIDTH_BUTTON):
+            user_input_width = READ_INPUT()
+            IF user_input_width > 65535:
+                user_input_width = 65535
+            pulse_width = user_input_width
+
+        # Trigger a Single Pulse
+        TRIGGER_PULSE()
+
+        # SPI Communication with Digital Potentiometer
+        SET_DIGIPOT(pulse_width, pulse_frequency)
+
+        # Wait for next event
+        WAIT_FOR_INTERRUPT()
+
+# ---------------------- TRIGGER PULSE FUNCTION ---------------------- #
+FUNCTION TRIGGER_PULSE():
+    io_state = io_state | BIT_TRIGGER  # Set BIT_TRIGGER HIGH
+    OUTPUT(IO_PORT, io_state)          # Send command to I/O port
+
+    CALL SHORT_DELAY                   # Maintain pulse for a brief period
+
+    io_state = io_state & ~BIT_TRIGGER # Clear BIT_TRIGGER (LOW)
+    OUTPUT(IO_PORT, io_state)          # Send updated state to I/O port
+
+# ---------------------- SPI WRITE FUNCTION ---------------------- #
+FUNCTION SET_DIGIPOT(width, frequency):
+    io_state = io_state & ~BIT_SPI_CS   # Activate SPI_CS (LOW)
+    OUTPUT(IO_PORT, io_state)
+
+    SEND_SPI_BYTE(width)                 # Send pulse width setting
+    SEND_SPI_BYTE(frequency)              # Send frequency setting
+
+    io_state = io_state | BIT_SPI_CS    # Deactivate SPI_CS (HIGH)
+    OUTPUT(IO_PORT, io_state)
+
+# ---------------------- SEND SPI BYTE FUNCTION ---------------------- #
+FUNCTION SEND_SPI_BYTE(DATA_BYTE):
+    INTEGER BIT_INDEX
+    FOR BIT_INDEX = 7 TO 0:
+        io_state = io_state & ~BIT_SPI_CLK  # Set SPI_CLK LOW
+        OUTPUT(IO_PORT, io_state)
+
+        IF (DATA_BYTE & (1 << BIT_INDEX)) != 0:
+            io_state = io_state | BIT_SPI_MOSI  # Send '1' bit
+        ELSE:
+            io_state = io_state & ~BIT_SPI_MOSI # Send '0' bit
+        OUTPUT(IO_PORT, io_state)
+
+        io_state = io_state | BIT_SPI_CLK  # Set SPI_CLK HIGH (Clock Data)
+        OUTPUT(IO_PORT, io_state)
+
+    io_state = io_state & ~BIT_SPI_CLK  # Finish last bit transfer
+    OUTPUT(IO_PORT, io_state)
+
+# ---------------------- INTERRUPT HANDLER (CTC-BASED TIMING) ---------------------- #
+FUNCTION ISR_CTC():
+    io_state = io_state | BIT_CTC_ON   # Set pulse ON time
+    OUTPUT(IO_PORT, io_state)
+
+    WAIT_FOR_TIMER(pulse_width)        # Wait for ON duration
+
+    io_state = io_state & ~BIT_CTC_ON  # Turn pulse OFF
+    OUTPUT(IO_PORT, io_state)
+
+    WAIT_FOR_TIMER(pulse_frequency - pulse_width)  # Wait for next cycle
+
+# ---------------------- SYSTEM STARTUP ---------------------- #
+INITIALIZE()
+MAIN_LOOP()
+
+```
 
 
 
