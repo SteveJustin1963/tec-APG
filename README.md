@@ -182,17 +182,30 @@ Trigger ── Optocoupler/MOSFET Driver ── Z80 GPIO
 ---
 
 # I/O Port Assignments
-| **Port Address** | **Name**               | **Function** |
-|---------------|-------------------|------------|
-| **0x01**      | **CTC_CONTROL**   | Configures Z80 **CTC timer** (sets pulse timing, frequency, and delays). |
-| **0x02**      | **GPIO_TRIGGER**  | Outputs **trigger signal** to the **555 Timer One-Shot** for generating a sharp pulse. |
-| **0x03**      | **CTC_PULSE_ON**  | Sets the **ON duration** of the pulse (width). |
-| **0x04**      | **CTC_PULSE_OFF** | Sets the **OFF duration** (pulse frequency control). |
-| **0x05**      | **SPI_CS**        | SPI **Chip Select** for controlling the **MCP4131 Digital Potentiometer** (used to adjust pulse parameters). |
-| **0x06**      | **SPI_MOSI**      | SPI **Master Out, Slave In** (sends data to the digital potentiometer). |
-| **0x07**      | **SPI_CLK**       | SPI **Clock** for synchronizing data transfer to the digital potentiometer. |
+
+
+### **🔹 Explanation of Bit Masking on a Single I/O Port**
+Using a **bit mask** allows us to store multiple **control signals** in a **single 8-bit I/O port** (0x01). Each **bit in the byte** represents a different function. 
 
 ---
+
+### **🔹 Bit Assignments for the I/O Port (0x01)**
+
+| **Bit #** | **Hex Mask** | **Function** | **Purpose** |
+|------|------------|---------------------|-----------------------------|
+| **Bit 0** | `0x01` (0000 0001) | **BIT_TRIGGER** | Triggers the **555 Timer One-Shot** |
+| **Bit 1** | `0x02` (0000 0010) | **BIT_SPI_CS** | Controls **SPI Chip Select (CS)** |
+| **Bit 2** | `0x04` (0000 0100) | **BIT_SPI_MOSI** | Sends **SPI Data Out (MOSI)** |
+| **Bit 3** | `0x08` (0000 1000) | **BIT_SPI_CLK** | Sends **SPI Clock (SCK)** |
+| **Bit 4** | `0x10` (0001 0000) | **BIT_CTC_ON** | Controls **CTC Timer Pulse ON (Width)** |
+| **Bit 5** | `0x20` (0010 0000) | **BIT_CTC_OFF** | Controls **CTC Timer Pulse OFF (Frequency)** |
+| **Bit 6** | `0x40` (0100 0000) | **(Unused, Reserved)** | Reserved for future use |
+| **Bit 7** | `0x80` (1000 0000) | **(Unused, Reserved)** | Reserved for future use |
+
+---
+
+
+
 
 
 # sudo
